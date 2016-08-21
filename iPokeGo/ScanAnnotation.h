@@ -7,10 +7,18 @@
 //
 
 #import <MapKit/MapKit.h>
+#import "global.h"
+#import "CoreDataEntities.h"
 
 @interface ScanAnnotation : MKPointAnnotation
 
-@property double latitude;
-@property double longitude;
+@property NSString *scanLocationID;
+@property int32_t altitude;
+@property int32_t radius;
+@property MKCircle *circle;
+
+- (instancetype)initWithScanLocation:(ScanLocations *)scanlocation;
+- (instancetype)initWithLocation:(CLLocationCoordinate2D)location;
+-(void)drawCircleWithRadius:(int)radius;
 
 @end

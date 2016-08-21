@@ -10,57 +10,43 @@
 
 @interface PokemonSelectTableViewController ()
 
+@property(strong, nonatomic) NSMutableArray *pokemonID;
+@property(strong, nonatomic) NSMutableArray *pokemonIDFiltered;
+@property(strong, nonatomic) NSMutableArray *pokemonSelected;
+@property(strong, nonatomic) NSDictionary *localization;
+@property(strong, nonatomic) UISearchController *searchController;
+
 @end
 
 @implementation PokemonSelectTableViewController
 
-- (void)viewDidLoad {
-    [super viewDidLoad];
-    
-    self.pokemonID          = [[NSMutableArray alloc] init];
-    self.pokemonChecked     = [[NSMutableArray alloc] init];
-    found                   = NO;
-    
-    [self loadLocalization];
-    
-    NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
-    NSArray *pokemonListSaved = [defaults objectForKey:self.preferenceKey];
-    
-    if([pokemonListSaved count] > 0)
-        self.pokemonSelected    = [[NSMutableArray alloc] initWithArray:pokemonListSaved];
-    else
-        self.pokemonSelected    = [[NSMutableArray alloc] init];
-    
-    for (int i = 1; i < (POKEMON_NUMBER + 1); i++)
-    {
-        [self.pokemonID addObject:[NSString stringWithFormat:@"%d", i]];
+- (instancetype)initWithCoder:(NSCoder *)aDecoder {
+    if (self = [super initWithCoder:aDecoder]) {
         
-        if([pokemonListSaved count] > 0)
-        {
-            found = NO;
-            for (NSString *pokemonIDSaved in pokemonListSaved) {
-                if (pokemonIDSaved == [NSString stringWithFormat:@"%d", i]) {
-                    found = YES;
-                    break;
-                }
-            }
-            
-            if(found)
-                [self.pokemonChecked addObject:[NSNumber numberWithBool:YES]];
-            else
-                [self.pokemonChecked addObject:[NSNumber numberWithBool:NO]];
-        }
-        else
-        {
-            
-            [self.pokemonChecked addObject:[NSNumber numberWithBool:NO]];
+        [self loadLocalization];
+        self.pokemonID = [[NSMutableArray alloc] init];
+        self.pokemonIDFiltered = [[NSMutableArray alloc] init];
+        for (int i = 1; i <= POKEMON_NUMBER; i++) {
+            [self.pokemonID addObject:@(i)];
         }
     }
+    return self;
 }
 
-- (void)didReceiveMemoryWarning {
-    [super didReceiveMemoryWarning];
-    // Dispose of any resources that can be recreated.
+- (void)viewDidLoad
+{
+    [super viewDidLoad];
+    
+    NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+    self.pokemonSelected = [NSMutableArray arrayWithArray:[defaults objectForKey:self.preferenceKey]];
+    
+    self.searchController = [[UISearchController alloc] initWithSearchResultsController:nil];
+    self.searchController.searchResultsUpdater = self;
+    self.searchController.dimsBackgroundDuringPresentation = NO;
+    [self.searchController.searchBar sizeToFit];
+    
+    self.tableView.tableHeaderView = self.searchController.searchBar;
+    [self.tableView setContentOffset:CGPointMake(0.0, self.searchController.searchBar.frame.size.height) animated:YES];
 }
 
 #pragma mark - Table view data source
@@ -70,77 +56,83 @@
 }
 
 - (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
-    return [self.pokemonID count];
+    if(self.searchController.active) {
+        return [self.pokemonIDFiltered count];
+    } else {
+        return [self.pokemonID count];
+    }
 }
 
 - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
+    NSString *pokemonID;
+    if(self.searchController.active) {
+        pokemonID = [[self.pokemonIDFiltered objectAtIndex:indexPath.row] stringValue];
+    } else {
+        pokemonID = [[self.pokemonID objectAtIndex:indexPath.row] stringValue];
+    }
     
     PokemonTableViewCell *cell      = [tableView dequeueReusableCellWithIdentifier:@"pokemoncell" forIndexPath:indexPath];
-    NSString *key                   = [NSString stringWithFormat:@"%d", ((int)indexPath.row + 1)];
     
-    cell.pokemonName.text           = [self.localization objectForKey:[NSString stringWithFormat:@"%@", key]];
+    cell.pokemonName.text           = [self.localization objectForKey:pokemonID];
 
-    UIImage *largeImage = [UIImage imageNamed : @"icons-hd.png"];
+    cell.pokemonimageView.image = [UIImage imageNamed:[NSString stringWithFormat:@"Pokemon_%@", pokemonID]];
     
-    /* Spritesheet has 7 columns */
-    int x = indexPath.row%SPRITESHEET_COLS*SPRITE_SIZE;
-    
-    int y = (int)indexPath.row + 1;
-    
-    while(y%SPRITESHEET_COLS != 0) y++;
-    
-    y = ((y/SPRITESHEET_COLS) -1) * SPRITE_SIZE;
-    
-    CGRect cropRect = CGRectMake(x, y, SPRITE_SIZE, SPRITE_SIZE);
-    
-    CGImageRef imageRef = CGImageCreateWithImageInRect([largeImage CGImage], cropRect);
-    cell.pokemonimageView.image = [UIImage imageWithCGImage:imageRef];
-    CGImageRelease(imageRef);
-    
-    
-    if([[self.pokemonChecked objectAtIndex:indexPath.row] boolValue])
+    if ([self.pokemonSelected containsObject:pokemonID]) {
         [cell setAccessoryType:UITableViewCellAccessoryCheckmark];
-    else
+    } else {
         [cell setAccessoryType:UITableViewCellAccessoryNone];
+    }
     
     return cell;
 }
 
 -(void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath
 {
-    PokemonTableViewCell *cell = [tableView cellForRowAtIndexPath:indexPath];
-    
-    if([[self.pokemonChecked objectAtIndex:indexPath.row] boolValue]) {
-        [self.pokemonChecked replaceObjectAtIndex:indexPath.row withObject:[NSNumber numberWithBool:NO]];
-        [self.pokemonSelected removeObject:[self.pokemonID objectAtIndex:indexPath.row]];
-        [cell setAccessoryType:UITableViewCellAccessoryNone];
+    NSString *pokemonID;
+    if(self.searchController.active) {
+        pokemonID = [[self.pokemonIDFiltered objectAtIndex:indexPath.row] stringValue];
     } else {
-        [self.pokemonChecked replaceObjectAtIndex:indexPath.row withObject:[NSNumber numberWithBool:YES]];
-        [self.pokemonSelected addObject:[self.pokemonID objectAtIndex:indexPath.row]];
-        [cell setAccessoryType:UITableViewCellAccessoryCheckmark];
+        pokemonID = [[self.pokemonID objectAtIndex:indexPath.row] stringValue];
     }
+    
+    PokemonTableViewCell *cell = [tableView cellForRowAtIndexPath:indexPath];
+    if ([self.pokemonSelected containsObject:pokemonID]) {
+        [cell setAccessoryType:UITableViewCellAccessoryNone];
+        [self.pokemonSelected removeObject:pokemonID];
+    } else {
+        [cell setAccessoryType:UITableViewCellAccessoryCheckmark];
+        [self.pokemonSelected addObject:pokemonID];
+    }
+}
+
+-(void)updateSearchResultsForSearchController:(UISearchController *)searchController
+{
+    NSString *searchTerm = searchController.searchBar.text;
+    if([searchTerm length] == 0) {
+        self.pokemonIDFiltered = [self.pokemonID mutableCopy];
+    } else {
+        NSMutableArray *searchResults = [[NSMutableArray alloc] init];
+        
+        for(id pokemon in self.pokemonID) {
+            if([[self.localization objectForKey:[NSString stringWithFormat:@"%@", pokemon]] containsString:searchTerm]) {
+                [searchResults addObject:pokemon];
+            }
+        }
+        
+        self.pokemonIDFiltered = searchResults;
+    }
+    
+    [self.tableView reloadData];
 }
 
 -(void)loadLocalization
 {
-    NSString *language = [[NSLocale currentLocale] objectForKey:NSLocaleLanguageCode];
     NSError *error;
     
-    NSURL *filePath = nil;
+    NSURL *filePath = [[NSBundle mainBundle] URLForResource:@"pokemon" withExtension:@"json"];
     
     self.localization = [[NSDictionary alloc] init];
-    
-    if([language isEqualToString:@"fr"])
-        filePath = [[NSBundle mainBundle] URLForResource:@"pokemon.fr" withExtension:@"json"];
-    else if([language isEqualToString:@"de"])
-        filePath = [[NSBundle mainBundle] URLForResource:@"pokemon.de" withExtension:@"json"];
-    else if([language isEqualToString:@"en"])
-        filePath = [[NSBundle mainBundle] URLForResource:@"pokemon.en" withExtension:@"json"];
-    else if([language isEqualToString:@"zh_cn"])
-        filePath = [[NSBundle mainBundle] URLForResource:@"pokemon.zh_cn" withExtension:@"json"];
-    else
-        filePath = [[NSBundle mainBundle] URLForResource:@"pokemon.en" withExtension:@"json"];
-    
+
     NSString *stringPath = [filePath absoluteString];
     NSData *localizationData = [NSData dataWithContentsOfURL:[NSURL URLWithString:stringPath]];
     
@@ -151,10 +143,7 @@
 
 -(IBAction)saveAction:(id)sender
 {
-    NSUserDefaults *prefs = [NSUserDefaults standardUserDefaults];
-    [prefs setObject:self.pokemonSelected forKey:self.preferenceKey];
-    [prefs synchronize];
-    
+    [[NSUserDefaults standardUserDefaults] setObject:self.pokemonSelected forKey:self.preferenceKey];
     [self.navigationController popViewControllerAnimated:YES];
 }
 
